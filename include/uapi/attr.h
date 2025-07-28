@@ -6,10 +6,6 @@
 #include <nd/type.h>
 #define G(x) xsqrtx(x)
 
-// We should move most of this to a common header,
-// since we want players to be able to implement,
-// yes, but not define the interface.
-
 enum attribute {
 	ATTR_STR,
 	ATTR_CON,
@@ -38,18 +34,18 @@ enum affect {
 };
 
 /* API */
-SIC_DECL(unsigned, hp_max, unsigned, ref);
-SIC_DECL(unsigned, mp_max, unsigned, ref);
-SIC_DECL(short, effect, unsigned, ref, enum affect, slot);
+SIC_DECL(long, hp_max, unsigned, ref);
+SIC_DECL(long, mp_max, unsigned, ref);
+SIC_DECL(long, effect, unsigned, ref, enum affect, slot);
 SIC_DECL(unsigned, stat, unsigned, ref, enum attribute, at);
+SIC_DECL(long, modifier, unsigned, ref, enum attribute, at);
 
 SIC_DECL(int, mcp_stats, unsigned, player_ref);
 SIC_DECL(int, train, unsigned, player_ref, enum attribute, at, unsigned, amount);
 SIC_DECL(int, attr_award, unsigned, player_ref, unsigned, amount);
 
 /* SIC */
-
-SIC_DECL(int, on_reroll, unsigned, player_ref)
+SIC_DECL(int, on_reroll, unsigned, player_ref);
 
 /* OTHERS */
 static inline unsigned

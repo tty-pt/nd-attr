@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 #include <nd/nd.h>
+#include <nd/level.h>
 
 typedef struct {
 	unsigned attr[ATTR_MAX];
@@ -14,48 +15,49 @@ typedef struct {
 unsigned attr_hd;
 unsigned bcp_stats;
 
-SIC_DEF(unsigned, hp_max, unsigned, ref);
-SIC_DEF(unsigned, mp_max, unsigned, ref);
-SIC_DEF(short, effect, unsigned, ref, enum affect, slot);
+/* API */
+SIC_DEF(long, hp_max, unsigned, ref);
+SIC_DEF(long, mp_max, unsigned, ref);
+SIC_DEF(long, effect, unsigned, ref, enum affect, slot);
 SIC_DEF(unsigned, stat, unsigned, ref, enum attribute, at);
+SIC_DEF(long, modifier, unsigned, ref, enum attribute, at);
 
 SIC_DEF(int, mcp_stats, unsigned, player_ref);
 SIC_DEF(int, train, unsigned, player_ref, enum attribute, at, unsigned, amount);
 SIC_DEF(int, attr_award, unsigned, player_ref, unsigned, amount);
 
-SIC_DEF(int, on_reroll, unsigned, player_ref)
+SIC_DEF(int, on_reroll, unsigned, player_ref);
 
-unsigned hp_max(unsigned ref) {
-	attr_t attr;
-	nd_get(attr_hd, &attr, &ref);
-	return (unsigned) (10 + ((long) attr.attr[ATTR_CON] - 10) / 2);
+long modifier(unsigned ref, enum attribute at) {
+	unsigned stat = call_stat(ref, at);
+	return (stat - 10) / 2;
 }
 
-unsigned mp_max(unsigned ref) {
-	attr_t attr;
-	nd_get(attr_hd, &attr, &ref);
-	return (unsigned) (10 + ((long) attr.attr[ATTR_WIZ] - 10) / 2);
-}
+long effect(unsigned ref, enum affect slot) {
+	static unsigned effect_map[] = {
+		ATTR_CON, // HP
+		ATTR_MAX, // MOV
+		ATTR_INT, // MDMG
+		ATTR_INT, // MDEF
+		ATTR_DEX, // DODGE
+		ATTR_STR, // DMG
+		ATTR_MAX, // DEF
+		ATTR_MAX, // NEG
+		ATTR_MAX, // BUF
+	};
 
-static unsigned effect_map[] = {
-	ATTR_CON, // HP
-	ATTR_MAX, // MOV
-	ATTR_INT, // MDMG
-	ATTR_INT, // MDEF
-	ATTR_DEX, // DODGE
-	ATTR_STR, // DMG
-	ATTR_MAX, // DEF
-	ATTR_MAX, // NEG
-	ATTR_MAX, // BUF
-};
-
-short effect(unsigned ref, enum affect slot) {
-	attr_t attr;
-	nd_get(attr_hd, &attr, &ref);
 	unsigned at = effect_map[slot];
 	if (at == ATTR_MAX)
 		return 0;
-	return 10 + (attr.attr[at] - 10) / 2;
+	return call_modifier(ref, at);
+}
+
+long hp_max(unsigned ref) {
+	return call_level(ref) * call_modifier(ref, ATTR_CON);
+}
+
+long mp_max(unsigned ref) {
+	return call_level(ref) + call_modifier(ref, ATTR_WIZ);
 }
 
 unsigned stat(unsigned ref, enum attribute at) {
@@ -65,9 +67,9 @@ unsigned stat(unsigned ref, enum attribute at) {
 }
 
 static inline unsigned char
-d20(void)
+d6(void)
 {
-	return (random() % 20) + 1;
+	return (random() % 6) + 1;
 }
 
 int
@@ -75,7 +77,7 @@ mcp_stats(unsigned player_ref)
 {
 	attr_t attr;
 	unsigned char iden = bcp_stats;
-	static char bcp_buf[2 + sizeof(iden) + sizeof(attr.attr) + sizeof(short) * 7];
+	static char bcp_buf[2 + sizeof(iden) + sizeof(attr.attr) + sizeof(unsigned) * 7];
 	char *p = bcp_buf;
 
 	nd_get(attr_hd, &attr, &player_ref);
@@ -85,17 +87,17 @@ mcp_stats(unsigned player_ref)
 	memcpy(p += sizeof(iden), attr.attr, sizeof(attr.attr));
 	p += sizeof(attr.attr);
 
-	short ret = 0;
+	unsigned ret = 0;
 	ret = call_effect(player_ref, AF_DODGE);
-	memcpy(p, &ret, sizeof(short));
+	memcpy(p, &ret, sizeof(unsigned));
 	p += sizeof(ret);
 
 	ret = call_effect(player_ref, AF_DMG);
-	memcpy(p, &ret, sizeof(short));
+	memcpy(p, &ret, sizeof(unsigned));
 	p += sizeof(ret);
 
 	ret = call_effect(player_ref, AF_DEF);
-	memcpy(p, &ret, sizeof(short));
+	memcpy(p, &ret, sizeof(unsigned));
 	p += sizeof(ret);
 
 	nd_wwrite(player_ref, bcp_buf, p - bcp_buf);
@@ -108,10 +110,10 @@ on_status(unsigned player_ref)
 {
 	attr_t attr;
 	nd_get(attr_hd, &attr, &player_ref);
-	nd_writef(player_ref, "Attr:\t\tstr %u\tcon %u\t"
-			"dex %u\tint %u\twis %u\tcha %u\t"
-			"mov %d\tdodge %d\tdmg %d\tmdmg %d\t"
-			"def %d\tmdef %d\n",
+	nd_writef(player_ref, "Attr\t   (base) str %4u, con %4u, "
+			"dex %4u, int %4u, wis %4u, cha %4u\n"
+			"\t effects: mov %4ld, dodg %3ld, dmg %4ld, "
+			"mdmg %3ld, def %4ld, mdef %3ld\n",
 			attr.attr[ATTR_STR], attr.attr[ATTR_CON],
 			attr.attr[ATTR_DEX], attr.attr[ATTR_INT],
 			attr.attr[ATTR_WIZ], attr.attr[ATTR_CHA],
@@ -124,10 +126,39 @@ on_status(unsigned player_ref)
 	return 0;
 }
 
+unsigned roll_stat(void) {
+	unsigned d4d6[] = {
+		d6(), d6(), d6(), d6()
+	};
+
+	unsigned min = 6, total = 0;
+	for (register unsigned i = 0; i < 4; i++) {
+		unsigned cur = d4d6[i];
+		total += cur;
+		if (cur < min)
+			min = cur;
+	}
+
+	return total - min;
+}
+
+void
+reroll(unsigned ref)
+{
+	attr_t attr;
+	nd_get(attr_hd, &attr, &ref);
+
+	for (int i = 0; i < ATTR_MAX; i++)
+		attr.attr[i] = roll_stat();
+
+	nd_put(attr_hd, &ref, &attr);
+	call_on_reroll(ref);
+	mcp_stats(ref);
+}
+
 void
 do_reroll(int fd, int argc, char *argv[])
 {
-	attr_t attr;
 	unsigned player_ref = fd_player(fd),
 	      thing_ref = player_ref;
 
@@ -142,15 +173,7 @@ do_reroll(int fd, int argc, char *argv[])
 		return;
 	}
 
-	nd_get(attr_hd, &attr, &player_ref);
-
-	for (int i = 0; i < ATTR_MAX; i++)
-		attr.attr[i] = d20();
-
-	nd_put(attr_hd, &player_ref, &attr);
-
-	call_on_reroll(player_ref);
-	mcp_stats(player_ref);
+	reroll(thing_ref);
 }
 
 int
@@ -159,9 +182,7 @@ train(unsigned player_ref, enum attribute at, unsigned amount) {
 
 	nd_get(attr_hd, &attr, &player_ref);
 
-	unsigned c = attr.attr[at];
 	attr.attr[at] += amount;
-
 	attr.spend -= amount;
 
 	nd_put(attr_hd, &player_ref, &attr);
@@ -199,7 +220,6 @@ do_train(int fd, int argc __attribute__((unused)), char *argv[]) {
 		  return;
 	}
 
-	unsigned c = attr.attr[at];
 	attr.attr[at] += amount;
 
 	attr.spend = avail - amount;
@@ -208,18 +228,19 @@ do_train(int fd, int argc __attribute__((unused)), char *argv[]) {
         mcp_stats(player_ref);
 }
 
-void mod_open() {
-	SIC_AREG(hp_max);
-	SIC_AREG(mp_max);
-	SIC_AREG(effect);
-	SIC_AREG(stat);
+int on_add(unsigned ref, unsigned type, uint64_t v __attribute__((unused))) {
+	attr_t attr;
 
-	SIC_AREG(mcp_stats);
-	SIC_AREG(train);
-	SIC_AREG(attr_award);
+	if (type != TYPE_ENTITY)
+		return 0;
 
-	SIC_AREG(on_reroll);
+	memset(&attr, 0, sizeof(attr));
+	nd_put(attr_hd, &ref, &attr);
+	reroll(ref);
+	return 0;
+}
 
+void mod_open(void) {
 	nd_len_reg("attr", sizeof(attr_t));
 	attr_hd = nd_open("attr", "u", "attr", 0);
 
@@ -229,21 +250,6 @@ void mod_open() {
 	nd_register("train", do_train, 0);
 }
 
-int on_add(unsigned ref, unsigned type, uint64_t v) {
-	attr_t attr;
-
-	if (type != TYPE_ENTITY)
-		return 0;
-
-	memset(&attr, 0, sizeof(attr));
-
-	for (register int j = 0; j < ATTR_MAX; j++)
-		attr.attr[j] = 1;
-
-	nd_put(attr_hd, &ref, &attr);
-	return 0;
-}
-
-void mod_install() {
+void mod_install(void) {
 	mod_open();
 }

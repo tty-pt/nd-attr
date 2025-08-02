@@ -29,7 +29,7 @@ SIC_DEF(int, attr_award, unsigned, player_ref, unsigned, amount);
 SIC_DEF(int, on_reroll, unsigned, player_ref);
 
 long modifier(unsigned ref, enum attribute at) {
-	unsigned stat = call_stat(ref, at);
+	long stat = call_stat(ref, at);
 	return (stat - 10) / 2;
 }
 

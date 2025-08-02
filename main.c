@@ -47,23 +47,33 @@ long effect(unsigned ref, enum affect slot) {
 	};
 
 	unsigned at = effect_map[slot];
+	long last = 0;
+
+	sic_last(&last);
 	if (at == ATTR_MAX)
-		return 0;
-	return call_modifier(ref, at);
+		return last;
+
+	return last + call_modifier(ref, at);
 }
 
 long hp_max(unsigned ref) {
-	return call_level(ref) * call_modifier(ref, ATTR_CON);
+	long last = 0;
+	sic_last(&last);
+	return last + call_level(ref) * call_modifier(ref, ATTR_CON);
 }
 
 long mp_max(unsigned ref) {
-	return call_level(ref) + call_modifier(ref, ATTR_WIZ);
+	long last = 0;
+	sic_last(&last);
+	return last + call_level(ref) + call_modifier(ref, ATTR_WIZ);
 }
 
 unsigned stat(unsigned ref, enum attribute at) {
 	attr_t attr;
+	unsigned last = 0;
 	nd_get(attr_hd, &attr, &ref);
-	return attr.attr[at];
+	sic_last(&last);
+	return last + attr.attr[at];
 }
 
 static inline unsigned char
@@ -244,12 +254,12 @@ void mod_open(void) {
 	nd_len_reg("attr", sizeof(attr_t));
 	attr_hd = nd_open("attr", "u", "attr", 0);
 
-	bcp_stats = nd_put(HD_BCP, NULL, "stats");
-
 	nd_register("reroll", do_reroll, 0);
 	nd_register("train", do_train, 0);
 }
 
 void mod_install(void) {
 	mod_open();
+
+	bcp_stats = nd_put(HD_BCP, NULL, "stats");
 }

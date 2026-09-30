@@ -1,0 +1,2 @@
+PROJECT_NAME           = "nd-attr"
+@INCLUDE = ../mk/Doxyfile

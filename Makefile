@@ -4,4 +4,9 @@ LDLIBS-libnd-attr := -lxylem
 
 FOLDER := nd
 
+
+# macOS ld rejects undefined symbols in shared libs, but WARN needs
+# qsyslog: an engine-provided function pointer resolved at dlopen (Linux
+# allows this by default). dynamic_lookup is the Darwin equivalent.
+LDFLAGS-libnd-attr-Darwin += -undefined dynamic_lookup
 -include ./../mk/include.mk

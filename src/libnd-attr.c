@@ -32,8 +32,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define ATTR_IMPL
-#include <nd/attr.h>
+#include <nd/attr-types.h>
 
 #include <nd/level.h>
 

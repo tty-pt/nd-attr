@@ -10,37 +10,60 @@
 #include <bud/bud_app.h>
 #include <nd/ui-slot-types.h>
 #include <nd/bcp.h>
+#include <nd/attr-bcp.h>
+#include <string.h>
+#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/* Gauges this sheet knows how to draw. The core client only stores named
+ * (val,max) gauges; which ones exist and how they look is presentation. */
+static const struct {
+	const char *name;   /* gauge published by the owning module */
+	const char *color;  /* CSS colour (variable with fallback) */
+} nd_attr_gauge_style[] = {
+	{ "hp", "var(--c1,#bd4a6a)" },
+	{ "mp", "var(--c4,#7389bd)" },
+};
+
 static inline bud_node *
 nd_attr_render_gauges(const void *state)
 {
 	const nd_client_state_t *st = (const nd_client_state_t *)state;
-	if (!st) return bud_element("div");
+	bud_node *wrap = bud_element("div");
+	bud_set_attr(wrap, "class", "flex flex-col gap-1.5 w-full max-w-[180px] select-none");
+	if (!st) return wrap;
 
-	unsigned hp_pct = (st->hp.max > 0) ? (st->hp.val * 100 / st->hp.max) : 0;
-	if (hp_pct > 100) hp_pct = 100;
+	for (size_t i = 0; i < sizeof(nd_attr_gauge_style) / sizeof(nd_attr_gauge_style[0]); i++) {
+		const nd_bar_state_t *g = nd_client_gauge_get(st, nd_attr_gauge_style[i].name);
+		unsigned val = g ? g->val : 0, max = g ? g->max : 0;
+		unsigned pct = max > 0 ? val * 100 / max : 0;
+		if (pct > 100) pct = 100;
 
-	unsigned mp_pct = (st->mp.max > 0) ? (st->mp.val * 100 / st->mp.max) : 0;
-	if (mp_pct > 100) mp_pct = 100;
+		bud_node *bar = bud_element("div");
+		bud_set_attr(bar, "data-gauge", nd_attr_gauge_style[i].name);
+		bud_set_attr(bar, "style", "outline: 0.5px solid white;");
+		bud_set_attr(bar, "class", "relative block w-full h-[10px] text-[9px] min-w-[120px] bg-black/60 overflow-hidden outline");
 
-	return bud_tpl(
-		"<div class='flex flex-col gap-1.5 w-full max-w-[180px] select-none'>"
-		"  <div style='outline: 0.5px solid white;' class='relative block w-full h-[10px] text-[9px] min-w-[120px] bg-black/60 overflow-hidden outline'>"
-		"    <div class='h-full bg-[var(--c1,#bd4a6a)] transition-all' style='width: %u%%;'></div>"
-		"    <div class='absolute inset-0 flex items-center justify-center font-mono text-white text-[9px] drop-shadow-[1px_1px_2px_black]'>%u/%u</div>"
-		"  </div>"
-		"  <div style='outline: 0.5px solid white;' class='relative block w-full h-[10px] text-[9px] min-w-[120px] bg-black/60 overflow-hidden outline'>"
-		"    <div class='h-full bg-[var(--c4,#7389bd)] transition-all' style='width: %u%%;'></div>"
-		"    <div class='absolute inset-0 flex items-center justify-center font-mono text-white text-[9px] drop-shadow-[1px_1px_2px_black]'>%u/%u</div>"
-		"  </div>"
-		"</div>",
-		hp_pct, st->hp.val, st->hp.max,
-		mp_pct, st->mp.val, st->mp.max
-	);
+		char cls[96], sty[48], txt[32];
+		bud_node *fill = bud_element("div");
+		snprintf(cls, sizeof(cls), "h-full bg-[%s] transition-all", nd_attr_gauge_style[i].color);
+		snprintf(sty, sizeof(sty), "width: %u%%;", pct);
+		bud_set_attr(fill, "class", cls);
+		bud_set_attr(fill, "style", sty);
+		bud_append(bar, fill);
+
+		bud_node *label = bud_element("div");
+		bud_set_attr(label, "class", "absolute inset-0 flex items-center justify-center font-mono text-white text-[9px] drop-shadow-[1px_1px_2px_black]");
+		snprintf(txt, sizeof(txt), "%u/%u", val, max);
+		bud_append(label, bud_text(txt));
+		bud_append(bar, label);
+
+		bud_append(wrap, bar);
+	}
+	return wrap;
 }
 
 static inline int
@@ -61,6 +84,22 @@ on_attr_card_click(bud_event *ev)
 	return 1;
 }
 
+static inline void
+nd_attr_stat_row(bud_node *col, const char *label, const char *value)
+{
+	bud_node *row = bud_element("div");
+	bud_set_attr(row, "class", "flex justify-between text-xs");
+	bud_node *l = bud_element("span");
+	bud_set_attr(l, "class", "tbbold font-bold text-neutral-300");
+	bud_append(l, bud_text(label));
+	bud_node *v = bud_element("span");
+	bud_set_attr(v, "class", "font-mono text-neutral-100");
+	bud_append(v, bud_text(value));
+	bud_append(row, l);
+	bud_append(row, v);
+	bud_append(col, row);
+}
+
 static inline bud_node *
 nd_attr_render_stats_modal(const void *state)
 {
@@ -75,36 +114,48 @@ nd_attr_render_stats_modal(const void *state)
 		: "hidden");
 	bud_bind(overlay, "click", 0, on_attr_modal_close);
 
-	bud_node *card = bud_tpl(
-		"<div id='stats' class='flex gap-6 p-4 border border-[#9589c5] bg-[#2c2c2c]/90 shadow-2xl min-w-[260px] select-none'>"
-		"  <div class='flex flex-col gap-1.5 flex-1'>"
-		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>str</span><span class='font-mono text-neutral-100'>%u</span></div>"
-		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>con</span><span class='font-mono text-neutral-100'>%u</span></div>"
-		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>dex</span><span class='font-mono text-neutral-100'>%u</span></div>"
-		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>int</span><span class='font-mono text-neutral-100'>%u</span></div>"
-		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>wiz</span><span class='font-mono text-neutral-100'>%u</span></div>"
-		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>cha</span><span class='font-mono text-neutral-100'>%u</span></div>"
-		"  </div>"
-		"  <div class='flex flex-col gap-1.5 flex-1'>"
-		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>dodge</span><span class='font-mono text-neutral-100'>%u</span></div>"
-		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>dmg</span><span class='font-mono text-neutral-100'>%u</span></div>"
-		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>mdmg</span><span class='font-mono text-neutral-100'>%u</span></div>"
-		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>def</span><span class='font-mono text-neutral-100'>%u</span></div>"
-		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>mdef</span><span class='font-mono text-neutral-100'>%u</span></div>"
-		"  </div>"
-		"</div>",
-		st ? st->stats.attr[ND_ATTR_STR] : 0,
-		st ? st->stats.attr[ND_ATTR_CON] : 0,
-		st ? st->stats.attr[ND_ATTR_DEX] : 0,
-		st ? st->stats.attr[ND_ATTR_INT] : 0,
-		st ? st->stats.attr[ND_ATTR_WIZ] : 0,
-		st ? st->stats.attr[ND_ATTR_CHA] : 0,
-		st ? st->stats.dodge : 0,
-		st ? st->stats.dmg : 0,
-		st ? st->stats.mdmg : 0,
-		st ? st->stats.def : 0,
-		st ? st->stats.mdef : 0
-	);
+	const nd_stats_state_t *ss = (const nd_stats_state_t *)
+		nd_client_ext_get(st, ND_ATTR_EXT_KEY);
+
+	static const struct { const char *label; int idx; } k_attrs[] = {
+		{ "str", ND_ATTR_STR }, { "con", ND_ATTR_CON }, { "dex", ND_ATTR_DEX },
+		{ "int", ND_ATTR_INT }, { "wiz", ND_ATTR_WIZ }, { "cha", ND_ATTR_CHA },
+	};
+	enum { EF_DODGE, EF_DMG, EF_MDMG, EF_DEF, EF_MDEF };
+	static const struct { const char *label; int which; } k_effects[] = {
+		{ "dodge", EF_DODGE }, { "dmg", EF_DMG }, { "mdmg", EF_MDMG },
+		{ "def", EF_DEF }, { "mdef", EF_MDEF },
+	};
+
+	bud_node *card = bud_element("div");
+	bud_set_attr(card, "id", "stats");
+	bud_set_attr(card, "class", "flex gap-6 p-4 border border-[#9589c5] bg-[#2c2c2c]/90 shadow-2xl min-w-[260px] select-none");
+
+	bud_node *cols[2];
+	for (int c = 0; c < 2; c++) {
+		cols[c] = bud_element("div");
+		bud_set_attr(cols[c], "class", "flex flex-col gap-1.5 flex-1");
+		bud_append(card, cols[c]);
+	}
+
+	for (size_t i = 0; i < sizeof(k_attrs) / sizeof(k_attrs[0]); i++) {
+		char v[16];
+		snprintf(v, sizeof(v), "%u", ss ? (unsigned)ss->attr[k_attrs[i].idx] : 0u);
+		nd_attr_stat_row(cols[0], k_attrs[i].label, v);
+	}
+	for (size_t i = 0; i < sizeof(k_effects) / sizeof(k_effects[0]); i++) {
+		unsigned val = 0;
+		if (ss) switch (k_effects[i].which) {
+		case EF_DODGE: val = ss->dodge; break;
+		case EF_DMG:   val = ss->dmg;   break;
+		case EF_MDMG:  val = ss->mdmg;  break;
+		case EF_DEF:   val = ss->def;   break;
+		case EF_MDEF:  val = ss->mdef;  break;
+		}
+		char v[16];
+		snprintf(v, sizeof(v), "%u", val);
+		nd_attr_stat_row(cols[1], k_effects[i].label, v);
+	}
 
 	bud_bind(card, "click", 1, on_attr_card_click);
 	bud_append(overlay, card);

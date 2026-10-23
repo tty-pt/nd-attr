@@ -66,16 +66,13 @@ nd_attr_render_stats_modal(const void *state)
 {
 	const nd_client_state_t *st = (const nd_client_state_t *)state;
 	const char *active = nd_ui_get_active_modal();
-	if (!st || !active || strcmp(active, "stats") != 0) {
-		bud_node *empty = bud_element("div");
-		bud_set_attr(empty, "id", "stats-modal");
-		bud_set_attr(empty, "class", "hidden");
-		return empty;
-	}
+	int is_open = (active && strcmp(active, "stats") == 0);
 
 	bud_node *overlay = bud_element("div");
 	bud_set_attr(overlay, "id", "stats-modal");
-	bud_set_attr(overlay, "class", "modal fixed inset-0 z-50 flex items-center justify-center bg-black/60");
+	bud_set_attr(overlay, "class", is_open
+		? "modal fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+		: "hidden");
 	bud_bind(overlay, "click", 0, on_attr_modal_close);
 
 	bud_node *card = bud_tpl(
@@ -96,17 +93,17 @@ nd_attr_render_stats_modal(const void *state)
 		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>mdef</span><span class='font-mono text-neutral-100'>%u</span></div>"
 		"  </div>"
 		"</div>",
-		st->stats.attr[ND_ATTR_STR],
-		st->stats.attr[ND_ATTR_CON],
-		st->stats.attr[ND_ATTR_DEX],
-		st->stats.attr[ND_ATTR_INT],
-		st->stats.attr[ND_ATTR_WIZ],
-		st->stats.attr[ND_ATTR_CHA],
-		st->stats.dodge,
-		st->stats.dmg,
-		st->stats.mdmg,
-		st->stats.def,
-		st->stats.mdef
+		st ? st->stats.attr[ND_ATTR_STR] : 0,
+		st ? st->stats.attr[ND_ATTR_CON] : 0,
+		st ? st->stats.attr[ND_ATTR_DEX] : 0,
+		st ? st->stats.attr[ND_ATTR_INT] : 0,
+		st ? st->stats.attr[ND_ATTR_WIZ] : 0,
+		st ? st->stats.attr[ND_ATTR_CHA] : 0,
+		st ? st->stats.dodge : 0,
+		st ? st->stats.dmg : 0,
+		st ? st->stats.mdmg : 0,
+		st ? st->stats.def : 0,
+		st ? st->stats.mdef : 0
 	);
 
 	bud_bind(card, "click", 1, on_attr_card_click);

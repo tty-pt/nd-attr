@@ -133,7 +133,15 @@ XY_IMPL(int, mcp_stats, unsigned, player_ref)
 	memcpy(p, &ret, sizeof(unsigned));
 	p += sizeof(ret);
 
+	ret = effect(player_ref, AF_MDMG);
+	memcpy(p, &ret, sizeof(unsigned));
+	p += sizeof(ret);
+
 	ret = effect(player_ref, AF_DEF);
+	memcpy(p, &ret, sizeof(unsigned));
+	p += sizeof(ret);
+
+	ret = effect(player_ref, AF_MDEF);
 	memcpy(p, &ret, sizeof(unsigned));
 	p += sizeof(ret);
 

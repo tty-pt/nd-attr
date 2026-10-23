@@ -28,23 +28,37 @@ nd_attr_render_gauges(const void *state)
 	if (mp_pct > 100) mp_pct = 100;
 
 	return bud_tpl(
-		"<div class='flex flex-col gap-2 w-full max-w-[180px]'>"
-		"  <div class='flex flex-col gap-0.5'>"
-		"    <div class='flex justify-between text-xs text-neutral-400'><span>HP</span><span id='hp-val'>%u / %u</span></div>"
-		"    <div class='w-full bg-neutral-800 rounded h-2 overflow-hidden'>"
-		"      <div id='hp-bar' class='bg-red-500 h-full rounded transition-all' style='width: %u%%;'></div>"
-		"    </div>"
+		"<div class='flex flex-col gap-1.5 w-full max-w-[180px] select-none'>"
+		"  <div style='outline: 0.5px solid white;' class='relative block w-full h-[10px] text-[9px] min-w-[120px] bg-black/60 overflow-hidden outline'>"
+		"    <div class='h-full bg-[var(--c1,#bd4a6a)] transition-all' style='width: %u%%;'></div>"
+		"    <div class='absolute inset-0 flex items-center justify-center font-mono text-white text-[9px] drop-shadow-[1px_1px_2px_black]'>%u/%u</div>"
 		"  </div>"
-		"  <div class='flex flex-col gap-0.5'>"
-		"    <div class='flex justify-between text-xs text-neutral-400'><span>MP</span><span id='mp-val'>%u / %u</span></div>"
-		"    <div class='w-full bg-neutral-800 rounded h-2 overflow-hidden'>"
-		"      <div id='mp-bar' class='bg-blue-500 h-full rounded transition-all' style='width: %u%%;'></div>"
-		"    </div>"
+		"  <div style='outline: 0.5px solid white;' class='relative block w-full h-[10px] text-[9px] min-w-[120px] bg-black/60 overflow-hidden outline'>"
+		"    <div class='h-full bg-[var(--c4,#7389bd)] transition-all' style='width: %u%%;'></div>"
+		"    <div class='absolute inset-0 flex items-center justify-center font-mono text-white text-[9px] drop-shadow-[1px_1px_2px_black]'>%u/%u</div>"
 		"  </div>"
 		"</div>",
-		st->hp.val, st->hp.max, hp_pct,
-		st->mp.val, st->mp.max, mp_pct
+		hp_pct, st->hp.val, st->hp.max,
+		mp_pct, st->mp.val, st->mp.max
 	);
+}
+
+static inline int
+on_attr_modal_close(bud_event *ev)
+{
+	(void)ev;
+	nd_ui_set_active_modal("");
+#ifdef __wasm__
+	bud_app_set_state();
+#endif
+	return 0;
+}
+
+static inline int
+on_attr_card_click(bud_event *ev)
+{
+	if (ev) bud_event_stop_propagation(ev);
+	return 1;
 }
 
 static inline bud_node *
@@ -61,39 +75,26 @@ nd_attr_render_stats_modal(const void *state)
 
 	bud_node *overlay = bud_element("div");
 	bud_set_attr(overlay, "id", "stats-modal");
-	bud_set_attr(overlay, "class", "fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4");
+	bud_set_attr(overlay, "class", "modal fixed inset-0 z-50 flex items-center justify-center bg-black/60");
+	bud_bind(overlay, "click", 0, on_attr_modal_close);
 
-	bud_node *card = bud_element("div");
-	bud_set_attr(card, "class", "bg-neutral-900 border border-neutral-700 rounded-lg p-6 max-w-sm w-full flex flex-col gap-4 shadow-xl");
-
-	bud_node *header = bud_element("div");
-	bud_set_attr(header, "class", "flex justify-between items-center border-b border-neutral-800 pb-2");
-	bud_node *title = bud_element("h2");
-	bud_set_attr(title, "class", "text-lg font-bold text-neutral-200");
-	bud_append(title, bud_text("Character Attributes"));
-	bud_append(header, title);
-
-	bud_node *close_btn = bud_element("button");
-	bud_set_attr(close_btn, "type", "button");
-	bud_set_attr(close_btn, "class", "text-neutral-400 hover:text-neutral-100 text-sm");
-	bud_append(close_btn, bud_text("✕"));
-	bud_append(header, close_btn);
-
-	bud_append(card, header);
-
-	bud_node *grid = bud_tpl(
-		"<div class='grid grid-cols-2 gap-2 text-sm text-neutral-200'>"
-		"  <div class='flex justify-between'><span class='text-neutral-400'>Strength:</span><span class='font-mono'>%u</span></div>"
-		"  <div class='flex justify-between'><span class='text-neutral-400'>Constitution:</span><span class='font-mono'>%u</span></div>"
-		"  <div class='flex justify-between'><span class='text-neutral-400'>Dexterity:</span><span class='font-mono'>%u</span></div>"
-		"  <div class='flex justify-between'><span class='text-neutral-400'>Intelligence:</span><span class='font-mono'>%u</span></div>"
-		"  <div class='flex justify-between'><span class='text-neutral-400'>Wisdom:</span><span class='font-mono'>%u</span></div>"
-		"  <div class='flex justify-between'><span class='text-neutral-400'>Charisma:</span><span class='font-mono'>%u</span></div>"
-		"</div>"
-		"<div class='border-t border-neutral-800 pt-2 grid grid-cols-3 gap-2 text-xs text-center'>"
-		"  <div><div class='text-neutral-500'>Dodge</div><div class='font-mono text-neutral-300'>%u</div></div>"
-		"  <div><div class='text-neutral-500'>Damage</div><div class='font-mono text-neutral-300'>%u</div></div>"
-		"  <div><div class='text-neutral-500'>Defense</div><div class='font-mono text-neutral-300'>%u</div></div>"
+	bud_node *card = bud_tpl(
+		"<div id='stats' class='flex gap-6 p-4 border border-[#9589c5] bg-[#2c2c2c]/90 shadow-2xl min-w-[260px] select-none'>"
+		"  <div class='flex flex-col gap-1.5 flex-1'>"
+		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>str</span><span class='font-mono text-neutral-100'>%u</span></div>"
+		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>con</span><span class='font-mono text-neutral-100'>%u</span></div>"
+		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>dex</span><span class='font-mono text-neutral-100'>%u</span></div>"
+		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>int</span><span class='font-mono text-neutral-100'>%u</span></div>"
+		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>wiz</span><span class='font-mono text-neutral-100'>%u</span></div>"
+		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>cha</span><span class='font-mono text-neutral-100'>%u</span></div>"
+		"  </div>"
+		"  <div class='flex flex-col gap-1.5 flex-1'>"
+		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>dodge</span><span class='font-mono text-neutral-100'>%u</span></div>"
+		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>dmg</span><span class='font-mono text-neutral-100'>%u</span></div>"
+		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>mdmg</span><span class='font-mono text-neutral-100'>%u</span></div>"
+		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>def</span><span class='font-mono text-neutral-100'>%u</span></div>"
+		"    <div class='flex justify-between text-xs'><span class='tbbold font-bold text-neutral-300'>mdef</span><span class='font-mono text-neutral-100'>%u</span></div>"
+		"  </div>"
 		"</div>",
 		st->stats.attr[ND_ATTR_STR],
 		st->stats.attr[ND_ATTR_CON],
@@ -103,9 +104,12 @@ nd_attr_render_stats_modal(const void *state)
 		st->stats.attr[ND_ATTR_CHA],
 		st->stats.dodge,
 		st->stats.dmg,
-		st->stats.def
+		st->stats.mdmg,
+		st->stats.def,
+		st->stats.mdef
 	);
-	bud_append(card, grid);
+
+	bud_bind(card, "click", 1, on_attr_card_click);
 	bud_append(overlay, card);
 	return overlay;
 }

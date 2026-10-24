@@ -65,6 +65,19 @@ is ignored, so the same command works either way.
   the stat frame; `on_status` and `on_reroll` cover display and re-rolls;
   `on_add` initializes the row for a new entity.
 
+## In-Game Commands (`man-src/`)
+
+| Command | Section | Description |
+|---------|---------|-------------|
+| `reroll` | 10 | Reinitialize character base attribute rolls |
+| `train` | 10 | Allocate training points to advance specific attributes |
+| `advitam` | 10 | Attribute restoration and life vitality command |
+
+## Wire Protocol & BCP Integration
+
+- Registers `bcp_stats` dynamically on `HD_BCP`.
+- Serializes base attributes (`attr[6]`: STR, CON, DEX, INT, WIZ, CHA) followed by derived combat metrics (DODGE, DMG, DEF) to `nd.wasm`.
+
 ## Testing
 
 There is no `test.sh` here. Behaviour is asserted by the engine's own suite,

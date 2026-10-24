@@ -1,4 +1,16 @@
-## 1.0.1
+## [1.1.0]
+
+- **Character Sheet & Vitality Gauges (`ux/attr_ui.c`, `<nd/attr-ui.h>`, `<nd/attr-bcp.h>`)**:
+  - Implemented `nd_attr_render_stats()` (2-column layout) and HP/MP vitality bar renderers.
+  - Adopted universal `BUD_DEFINE_STATE` and `BUD_SLOT_CONTRIBUTE` for character stats and vitality bar slots.
+  - Registered in-game `stats` CLI command.
+  - Added BCP protocol unpacker for HP and MP vitality gauge messages.
+- **Two-Header Architecture (`<nd/attr-types.h>`)**:
+  - Separated public attribute types and removed `ATTR_IMPL` guards.
+- **Documentation**:
+  - Standardized README with man-src, art, and modder guide.
+
+## [1.0.1]
 
 - **macOS: link with `-undefined dynamic_lookup`.** macOS `ld` rejects
   undefined symbols in a shared library, but `WARN` needs `qsyslog` — an

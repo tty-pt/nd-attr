@@ -133,7 +133,15 @@ XY_IMPL(int, mcp_stats, unsigned, player_ref)
 	memcpy(p, &ret, sizeof(unsigned));
 	p += sizeof(ret);
 
+	ret = effect(player_ref, AF_MDMG);
+	memcpy(p, &ret, sizeof(unsigned));
+	p += sizeof(ret);
+
 	ret = effect(player_ref, AF_DEF);
+	memcpy(p, &ret, sizeof(unsigned));
+	p += sizeof(ret);
+
+	ret = effect(player_ref, AF_MDEF);
 	memcpy(p, &ret, sizeof(unsigned));
 	p += sizeof(ret);
 
@@ -305,12 +313,29 @@ XY_IMPL(int, on_add, unsigned, ref, unsigned, type, uint64_t, v)
 	return 0;
 }
 
+static void
+do_stats(int fd, int argc __attribute__((unused)), char *argv[] __attribute__((unused)))
+{
+	unsigned player_ref = fd_player(fd);
+	attr_t attr;
+	if (nd_get(attr_hd, &attr, &player_ref) != 0) {
+		reroll(player_ref);
+		nd_get(attr_hd, &attr, &player_ref);
+	}
+	mcp_stats(player_ref);
+	nd_printf(player_ref, "Attributes: STR=%u CON=%u DEX=%u INT=%u WIZ=%u CHA=%u (Spendable=%u)\n",
+		attr.attr[ATTR_STR], attr.attr[ATTR_CON], attr.attr[ATTR_DEX],
+		attr.attr[ATTR_INT], attr.attr[ATTR_WIZ], attr.attr[ATTR_CHA], attr.spend);
+	nd_flush(player_ref);
+}
+
 XY_MODULE_API void
 xy_install(void)
 {
 	nd_len_reg("attr", sizeof(attr_t));
 	attr_hd = nd_open("attr", "u", "attr", 0);
 
+	nd_register("stats", do_stats, 0);
 	nd_register("reroll", do_reroll, 0);
 	nd_register("train", do_train, 0);
 

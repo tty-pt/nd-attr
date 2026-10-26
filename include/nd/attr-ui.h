@@ -112,7 +112,7 @@ nd_attr_render_stats_modal(const void *state)
 	bud_set_attr(overlay, "class", is_open
 		? "modal fixed inset-0 z-50 flex items-center justify-center bg-black/60"
 		: "hidden");
-	bud_bind(overlay, "click", 0, on_attr_modal_close);
+	bud_bind(overlay, "click", 1, on_attr_modal_close);
 
 	const nd_stats_state_t *ss = (const nd_stats_state_t *)
 		nd_client_ext_get(st, ND_ATTR_EXT_KEY);

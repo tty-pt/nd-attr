@@ -32,8 +32,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define ATTR_IMPL
-#include <nd/attr.h>
+#include <nd/attr-types.h>
 
 #include <nd/level.h>
 
@@ -44,6 +43,8 @@ typedef struct {
 
 static unsigned attr_hd;
 static unsigned bcp_stats;
+
+static void reroll(unsigned ref);
 
 /* API. XY_IMPL both defines the function and emits the dispatch adapter, so
  * each name gets exactly one, with its body -- no forward declarations.
@@ -57,11 +58,15 @@ static unsigned bcp_stats;
  * after its callee. attr_stat leads because modifier calls it. */
 XY_IMPL(unsigned, attr_stat, unsigned, ref, enum attribute, at)
 {
-	attr_t attr;
+	attr_t attr = { 0 };
 
 	if (at >= ATTR_MAX)
 		return 0;
-	nd_get(attr_hd, &attr, &ref);
+	if (nd_get(attr_hd, &attr, &ref) != 0) {
+		reroll(ref);
+		if (nd_get(attr_hd, &attr, &ref) != 0)
+			return 10;
+	}
 	return attr.attr[at];
 }
 
@@ -134,7 +139,15 @@ XY_IMPL(int, mcp_stats, unsigned, player_ref)
 	memcpy(p, &ret, sizeof(unsigned));
 	p += sizeof(ret);
 
+	ret = effect(player_ref, AF_MDMG);
+	memcpy(p, &ret, sizeof(unsigned));
+	p += sizeof(ret);
+
 	ret = effect(player_ref, AF_DEF);
+	memcpy(p, &ret, sizeof(unsigned));
+	p += sizeof(ret);
+
+	ret = effect(player_ref, AF_MDEF);
 	memcpy(p, &ret, sizeof(unsigned));
 	p += sizeof(ret);
 
@@ -145,8 +158,11 @@ XY_IMPL(int, mcp_stats, unsigned, player_ref)
 
 XY_IMPL(int, on_status, unsigned, player_ref)
 {
-	attr_t attr;
-	nd_get(attr_hd, &attr, &player_ref);
+	attr_t attr = { 0 };
+	if (nd_get(attr_hd, &attr, &player_ref) != 0) {
+		reroll(player_ref);
+		nd_get(attr_hd, &attr, &player_ref);
+	}
 	nd_printf(player_ref, "Attr\t   (base) str %4u, con %4u, "
 			"dex %4u, int %4u, wis %4u, cha %4u\n"
 			"\t effects: mov %4ld, dodg %3ld, dmg %4ld, "
@@ -306,12 +322,29 @@ XY_IMPL(int, on_add, unsigned, ref, unsigned, type, uint64_t, v)
 	return 0;
 }
 
+static void
+do_stats(int fd, int argc __attribute__((unused)), char *argv[] __attribute__((unused)))
+{
+	unsigned player_ref = fd_player(fd);
+	attr_t attr;
+	if (nd_get(attr_hd, &attr, &player_ref) != 0) {
+		reroll(player_ref);
+		nd_get(attr_hd, &attr, &player_ref);
+	}
+	mcp_stats(player_ref);
+	nd_printf(player_ref, "Attributes: STR=%u CON=%u DEX=%u INT=%u WIZ=%u CHA=%u (Spendable=%u)\n",
+		attr.attr[ATTR_STR], attr.attr[ATTR_CON], attr.attr[ATTR_DEX],
+		attr.attr[ATTR_INT], attr.attr[ATTR_WIZ], attr.attr[ATTR_CHA], attr.spend);
+	nd_flush(player_ref);
+}
+
 XY_MODULE_API void
 xy_install(void)
 {
 	nd_len_reg("attr", sizeof(attr_t));
 	attr_hd = nd_open("attr", "u", "attr", 0);
 
+	nd_register("stats", do_stats, 0);
 	nd_register("reroll", do_reroll, 0);
 	nd_register("train", do_train, 0);
 

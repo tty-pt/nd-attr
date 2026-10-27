@@ -44,6 +44,8 @@ typedef struct {
 static unsigned attr_hd;
 static unsigned bcp_stats;
 
+static void reroll(unsigned ref);
+
 /* API. XY_IMPL both defines the function and emits the dispatch adapter, so
  * each name gets exactly one, with its body -- no forward declarations.
  *
@@ -56,11 +58,15 @@ static unsigned bcp_stats;
  * after its callee. attr_stat leads because modifier calls it. */
 XY_IMPL(unsigned, attr_stat, unsigned, ref, enum attribute, at)
 {
-	attr_t attr;
+	attr_t attr = { 0 };
 
 	if (at >= ATTR_MAX)
 		return 0;
-	nd_get(attr_hd, &attr, &ref);
+	if (nd_get(attr_hd, &attr, &ref) != 0) {
+		reroll(ref);
+		if (nd_get(attr_hd, &attr, &ref) != 0)
+			return 10;
+	}
 	return attr.attr[at];
 }
 
@@ -152,8 +158,11 @@ XY_IMPL(int, mcp_stats, unsigned, player_ref)
 
 XY_IMPL(int, on_status, unsigned, player_ref)
 {
-	attr_t attr;
-	nd_get(attr_hd, &attr, &player_ref);
+	attr_t attr = { 0 };
+	if (nd_get(attr_hd, &attr, &player_ref) != 0) {
+		reroll(player_ref);
+		nd_get(attr_hd, &attr, &player_ref);
+	}
 	nd_printf(player_ref, "Attr\t   (base) str %4u, con %4u, "
 			"dex %4u, int %4u, wis %4u, cha %4u\n"
 			"\t effects: mov %4ld, dodg %3ld, dmg %4ld, "
